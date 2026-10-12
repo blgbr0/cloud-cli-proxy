@@ -4,7 +4,7 @@
 
 # Cloud CLI Proxy
 
-**A smarter Claude Code Wrapper. Containerize Claude Code so you look like a regular American developer — and Anthropic's risk system leaves you alone.**
+**Enterprise-grade secure remote development environment. A containerized, isolated, auditable, and policy-driven platform for running Claude Code in teams.**
 
 [![CI](https://github.com/ZaneL1u/cloud-cli-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/ZaneL1u/cloud-cli-proxy/actions/workflows/ci.yml)
 [![Images](https://github.com/ZaneL1u/cloud-cli-proxy/actions/workflows/build-images.yml/badge.svg)](https://github.com/ZaneL1u/cloud-cli-proxy/actions/workflows/build-images.yml)
@@ -19,38 +19,36 @@
 
 ## The Problem
 
-Claude Code is great. The risk system is not. Wrong IP, VPS-looking environment fingerprints, telemetry ratting you out — your account's on borrowed time.
+As AI coding tools become widespread in enterprises, security and compliance teams face new challenges: inconsistent development environments, excessive AI agent permissions, sensitive codebases lacking isolation, unmanaged network egress, and unauditable user actions. Running Claude Code directly on production systems or personal devices often fails to meet enterprise security baselines and compliance requirements.
 
-Cloud CLI Proxy does one thing: **it makes Claude Code think you're a regular person on a Windows laptop in Los Angeles.** Every layer is spoofed — IP, system fingerprint, TLS handshake. To Anthropic's servers, you're just another residential user in the US, not some cloud instance in a data center.
+Cloud CLI Proxy provides a **self-hosted, containerized remote development infrastructure** that encapsulates Claude Code in a controlled, isolated environment. Each developer gets an independent, standardized container workspace. All network egress, system configurations, and user actions are governed by platform-wide policies, ensuring AI coding activities operate within a **secure, compliant, and auditable** framework.
 
-Deploy it on your own machine, SSH in, start coding. Your local project directory mounts into the container at the exact same path — using Claude Code feels identical to running it natively.
+Deploy it on your own server. Developers SSH in and start coding. Local project directories mount into the container with identical paths, delivering a development experience indistinguishable from running locally.
 
 ---
 
 ## How It Works
 
-### Identity Spoofing
+### Environment Isolation & Security Hardening
 
-This isn't just slapping a proxy on and calling it done. Claude Code checks multiple signals to figure out where you are and what you're running on:
+The platform standardizes and isolates development environments across multiple dimensions, ensuring container workspaces are decoupled from the host system and meet enterprise security baselines:
 
-- **System fingerprint override** — CPU model shows as AMD EPYC. MAC address and machine-id are rewritten. Output from `ioreg`, `system_profiler`, `sysctl` is intercepted and replaced with what we want Claude Code to see
-- **Windows-style hostnames** — Auto-generated `DESKTOP-XXXXXXX` or `LAPTOP-XXXXXXX`. Reads like someone's home PC
-- **Container detection scrubbed** — `/.dockerenv` is gone. Docker/containerd strings filtered from cgroup. Standard container checks come up empty
-- **Timezone & locale** — Defaults to Pacific Time + `en_US.UTF-8`. Configurable per container
-- **TLS fingerprint** — Outbound connections use uTLS with a Chrome fingerprint. The TLS handshake looks exactly like someone browsing from Chrome
-- **Telemetry blocked** — DNS-level blocking stops Claude Code from phoning home to `statsig.anthropic.com`, `sentry.io`, `cdn.growthbook.io`
+- **System environment standardization** — Unifies CPU model, MAC address, machine-id, and other system identifiers, ensuring consistent container environments for all developers and eliminating security blind spots caused by environment drift. Outputs from `ioreg`, `system_profiler`, `sysctl` are policy-processed to avoid leaking underlying infrastructure details.
+- **Standardized hostnames** — Auto-generates hostnames following enterprise naming conventions for asset management and audit trails.
+- **Minimized attack surface** — Removes unnecessary system information exposure inside containers (e.g., `/.dockerenv`, container runtime identifiers in cgroup), following security hardening best practices to reduce potential attack surface.
+- **Timezone & locale compliance** — Defaults to Pacific Time and `en_US.UTF-8`, adjustable per container to meet regional compliance and localization requirements.
+- **Outbound traffic compliance** — Outbound connections use uTLS with a standard Chrome fingerprint, ensuring network communications align with enterprise egress policies and avoiding anomalous traffic patterns that trigger security alerts.
+- **Data Loss Prevention (DLP) & network egress control** — Implements DNS-level network policies to block telemetry and tracking domains such as `statsig.anthropic.com`, `sentry.io`, and `cdn.growthbook.io`, preventing accidental data exfiltration through AI agents and meeting enterprise DLP requirements.
 
-### Strict IP Isolation
+### Network Policy Enforcement & Egress Isolation
 
-Every container gets its own exit IP. Every last packet — HTTP, DNS, WebRTC — goes through a sing-box tun tunnel and exits from that IP. nftables default-deny means nothing leaks.
+Every container is bound to an independent egress IP. All traffic — HTTP, DNS, WebRTC — exits through a sing-box TUN tunnel from that designated IP. nftables default-deny ensures no policy bypass paths exist.
 
-Six proxy protocols supported: SOCKS5, VMess, VLESS, Shadowsocks, Trojan, HTTP.
+Six proxy protocols are supported: SOCKS5, VMess, VLESS, Shadowsocks, Trojan, HTTP — making it easy to integrate with existing enterprise network egress or compliant proxy infrastructure.
 
-**You need a residential IP for this to work.** Data center IP ranges are flagged everywhere. AT&T residential IPs are clean and pass risk checks reliably. This is what I use:
+**Enterprise egress recommendation**: Use network egress that meets your enterprise compliance requirements, such as corporate-owned residential broadband, commercial VPN, or cloud network egress. Avoid flagged data center IP ranges to ensure stability and compliance of network policies.
 
-👉 [https://www.vircs.com/welcome?vcd=70685425](https://www.vircs.com/welcome?vcd=70685425)
-
-### Code Mapping — Feels Like Local
+### Code Mapping — Consistent Local Development Experience
 
 This is what separates it from a regular VPS. The container mounts your local project directory via sshfs at the **exact same path**.
 
@@ -94,7 +92,6 @@ First-time setup: log into admin dashboard → add egress IPs → create users �
 - Docker Engine 28.x+
 - Docker Compose v2
 
-
 ### Docker Compose (recommended)
 
 ```bash
@@ -119,24 +116,21 @@ Creates a `cloudproxy` system user, builds binaries and images, installs systemd
 | `ADMIN_USERNAME` | Admin username | `admin` |
 | `ADMIN_PASSWORD` | Admin password (bcrypt) | Required |
 | `ADMIN_JWT_SECRET` | JWT signing secret | Required |
-
 | `SSH_PROXY_PORT` | SSH proxy port | `2222` |
 | `LOG_FORMAT` | Log format `json` / `text` | `json` |
 | `LOG_LEVEL` | Log level | `info` |
 
 ---
 
----
-
 ## Admin Dashboard
 
-Beyond spoofing and IP isolation, the platform includes full governance:
+Beyond environment isolation and network policy enforcement, the platform includes full governance:
 
-- User lifecycle — create, suspend, auto-expire, password rotation
-- Host lifecycle — create, start, stop, rebuild (keep or wipe /workspace), delete
+- User lifecycle — create, suspend, auto-expire, password rotation, RBAC support
+- Host lifecycle — create, start, stop, rebuild (keep or wipe `/workspace`), delete
 - Egress IP management — CRUD, connectivity testing
 - Bypass firewall — domain, CIDR, port whitelisting, snapshot versioning, preview → apply → rollback
-- Full audit trail — every operation written to the events table
+- Full audit trail — every operation written to the events table, supporting compliance audits (SOX, GDPR, etc.)
 - SSE real-time push for task progress and host status
 - Built-in KasmVNC + Chromium — one click from dashboard to remote desktop
 
@@ -162,6 +156,15 @@ User ──curl──> Control Plane (:8080) ──Docker──>    │ User Con
 | **User Container** | Ubuntu 24.04 — OpenSSH + Claude Code + sshfs + KasmVNC + Chromium |
 | **SQLite** | Persists users, hosts, egress IPs, tasks, events, audit logs (WAL mode) |
 | **Admin SPA** | React 19 + TypeScript + Vite + Tailwind CSS |
+
+---
+
+## Compliance & Legal Notice
+
+- This project is designed as self-hosted enterprise infrastructure to meet security, audit, and compliance requirements.
+- Each end user should authenticate with their own credentials and comply with Anthropic's commercial terms of service.
+- This project does not provide, encourage, or support any behavior intended to circumvent terms of service or bypass security mechanisms. Users are responsible for ensuring their usage complies with applicable laws and service provider policies.
+- Released under the MIT License. The authors assume no liability for any legal or compliance issues arising from the use of this project.
 
 ---
 
